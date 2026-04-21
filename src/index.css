@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #ffffff;
+  --color-subtle-light: #F8F9FA;
+  --color-subtle: #E5E7EB;
+  --color-secondary: #E4E4E4;
+  --color-antiflash-white: #f2f2f2;
+  --color-gray: #444444;
+  --color-gray2: ##E9E9E9;
+  --color-accent: #a9023a;
+  --color-accent-hover: #8a012e;
+  --color-accent-light: #A9023A26;
+  --color-txt-primary: #000000;
+  --color-txt-secondary: #ffffff;
+  --color-txt-subtle: #727272;
+  --color-sidebar: #F9F9F9;
+}
+
+/* Gaya global */
+html {
+  scroll-behavior: smooth;
+}
