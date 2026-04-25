@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import useApi from "../../hooks/UseApi";
-
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 
-// Base URL default
 const BASE_URL = import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '');
 
 const ArrowLeftIcon = () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>);
@@ -35,20 +33,24 @@ const ArtikelForm = () => {
     slug: "",
     content: "",
     category_id: "",
-    tags: "", 
+    tags: "",
     status: "draft",
+    author_name: "",
+    author_profile: "",
+    author_quotes: "",
+    meta_title: "",
+    meta_description: "",
   });
-  
-  const [featuredImage, setFeaturedImage] = useState(null); 
+
+  const [featuredImage, setFeaturedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
 
-  // --- 1. FUNGSI HELPER UNTUK URL GAMBAR ---
+  const [authorImage, setAuthorImage] = useState(null);
+  const [authorImagePreview, setAuthorImagePreview] = useState(null);
+
   const getImageUrl = (path) => {
     if (!path) return null;
-    // Jika path sudah ada http/https, kembalikan langsung (jangan tambah BASE_URL)
     if (path.startsWith("http")) return path;
-    
-    // Jika path relatif, tambahkan BASE_URL
     const base = import.meta.env.VITE_API_BASE || BASE_URL;
     return `${base}${path}`;
   };
@@ -59,7 +61,7 @@ const ArtikelForm = () => {
         const response = await request("/article-categories");
         if(response.data) setCategories(response.data);
       } catch (err) {
-        console.error("Gagal load kategori", err);
+        console.error(err);
       }
     };
     fetchCategories();
@@ -71,7 +73,7 @@ const ArtikelForm = () => {
         try {
           const response = await request(`/articles?limit=1000`);
           const found = response.data.data.find(a => a.id === parseInt(id));
-          
+
           if (found) {
             setFormData({
               title: found.title,
@@ -80,32 +82,38 @@ const ArtikelForm = () => {
               category_id: found.categories?.[0]?.id || "",
               tags: found.tags ? found.tags.map(t => t.name).join(", ") : "",
               status: found.status,
+              author_name: found.author_name || "",
+              author_profile: found.author_profile || "",
+              author_quotes: found.author_quotes || "",
+              meta_title: found.meta_title || "",
+              meta_description: found.meta_description || "",
             });
-            
-            // --- 2. GUNAKAN FUNGSI HELPER DI SINI ---
+
             if (found.featured_image_url) {
               setImagePreview(getImageUrl(found.featured_image_url));
             }
+            if (found.author_image) {
+              setAuthorImagePreview(getImageUrl(found.author_image));
+            }
           }
         } catch (error) {
-          console.error("Gagal load detail", error);
+          console.error(error);
         }
       };
       fetchDetail();
     }
-  }, [isEditMode, id, request]); // getImageUrl stabil
+  }, [isEditMode, id, request]);
 
   useEffect(() => {
     return () => {
-      if (imagePreview && imagePreview.startsWith("blob:")) {
-        URL.revokeObjectURL(imagePreview);
-      }
+      if (imagePreview && imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+      if (authorImagePreview && authorImagePreview.startsWith("blob:")) URL.revokeObjectURL(authorImagePreview);
     };
-  }, [imagePreview]);
+  }, [imagePreview, authorImagePreview]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === "title" && !isEditMode) {
       const slugValue = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
       setFormData(prev => ({ ...prev, title: value, slug: slugValue }));
@@ -132,15 +140,28 @@ const ArtikelForm = () => {
     }
   };
 
+  const handleAuthorImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setAuthorImage(file);
+      setAuthorImagePreview(URL.createObjectURL(file));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const data = new FormData();
     data.append("title", formData.title);
     data.append("slug", formData.slug);
     data.append("content", formData.content);
     data.append("status", formData.status);
-    
+    data.append("author_name", formData.author_name);
+    data.append("author_profile", formData.author_profile);
+    data.append("author_quotes", formData.author_quotes);
+    data.append("meta_title", formData.meta_title);
+    data.append("meta_description", formData.meta_description);
+
     if (formData.category_id) {
         const catArr = [parseInt(formData.category_id)];
         data.append("categories", JSON.stringify(catArr));
@@ -153,6 +174,9 @@ const ArtikelForm = () => {
 
     if (featuredImage) {
       data.append("featured_image", featuredImage);
+    }
+    if (authorImage) {
+      data.append("author_image", authorImage);
     }
 
     try {
@@ -180,8 +204,8 @@ const ArtikelForm = () => {
 
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <button 
-            onClick={() => navigate("/admin/artikel")} 
+          <button
+            onClick={() => navigate("/admin/artikel")}
             className="p-2 hover:bg-white rounded-lg transition-colors text-txt-subtle hover:text-txt-primary"
           >
             <ArrowLeftIcon />
@@ -192,7 +216,7 @@ const ArtikelForm = () => {
             </h1>
           </div>
         </div>
-        <button 
+        <button
           onClick={handleSubmit}
           disabled={loading}
           className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white px-6 py-3 rounded-lg font-medium shadow-md transition-colors disabled:opacity-50"
@@ -233,7 +257,7 @@ const ArtikelForm = () => {
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-subtle">
             <label className="block text-sm font-semibold text-txt-primary mb-2">Konten Lengkap</label>
-            <ReactQuill 
+            <ReactQuill
                 theme="snow"
                 value={formData.content}
                 onChange={handleEditorChange}
@@ -241,74 +265,158 @@ const ArtikelForm = () => {
                 placeholder="Tulis artikel lengkap di sini..."
             />
           </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-subtle">
+            <h3 className="font-semibold text-txt-primary mb-4 border-b border-subtle pb-2">Pengaturan SEO (Meta Tags)</h3>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Meta Title</label>
+                    <input
+                        type="text"
+                        name="meta_title"
+                        value={formData.meta_title}
+                        onChange={handleChange}
+                        placeholder="Judul untuk mesin pencari (opsional, default: Judul Artikel)"
+                        className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent text-sm"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Disarankan 50-60 karakter.</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Meta Description</label>
+                    <textarea
+                        name="meta_description"
+                        value={formData.meta_description}
+                        onChange={handleChange}
+                        placeholder="Deskripsi singkat untuk hasil pencarian Google..."
+                        className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent text-sm"
+                        rows="3"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Disarankan 150-160 karakter.</p>
+                </div>
+            </div>
+          </div>
         </div>
+
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-subtle">
-            <h3 className="font-semibold text-txt-primary mb-4 border-b border-subtle pb-2">Status</h3>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="w-full p-2 rounded-lg border border-subtle bg-white focus:outline-none focus:border-accent"
-            >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="archived">Archived</option>
-            </select>
+            <h3 className="font-semibold text-txt-primary mb-4 border-b border-subtle pb-2">Status & Kategori</h3>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Status Publikasi</label>
+                    <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    className="w-full p-2 rounded-lg border border-subtle bg-white focus:outline-none focus:border-accent"
+                    >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Kategori</label>
+                    <select
+                        name="category_id"
+                        value={formData.category_id}
+                        onChange={handleChange}
+                        className="w-full p-2 rounded-lg border border-subtle bg-white focus:outline-none focus:border-accent"
+                    >
+                        <option value="">-- Pilih Kategori --</option>
+                        {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Tags</label>
+                    <input
+                        type="text"
+                        name="tags"
+                        value={formData.tags}
+                        onChange={handleChange}
+                        placeholder="Contoh: Bisnis, Teknologi"
+                        className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent"
+                    />
+                </div>
+            </div>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-subtle">
-            <h3 className="font-semibold text-txt-primary mb-4 border-b border-subtle pb-2">Pengaturan</h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-txt-primary mb-1">Kategori</label>
-              <select
-                name="category_id"
-                value={formData.category_id}
-                onChange={handleChange}
-                className="w-full p-2 rounded-lg border border-subtle bg-white focus:outline-none focus:border-accent"
-              >
-                <option value="">-- Pilih Kategori --</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-txt-primary mb-1">Tags</label>
-              <input
-                type="text"
-                name="tags"
-                value={formData.tags}
-                onChange={handleChange}
-                placeholder="Contoh: Bisnis, Teknologi"
-                className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent"
-              />
+            <h3 className="font-semibold text-txt-primary mb-4 border-b border-subtle pb-2">Info Penulis (Opsional)</h3>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Nama Penulis</label>
+                    <input
+                        type="text"
+                        name="author_name"
+                        value={formData.author_name}
+                        onChange={handleChange}
+                        placeholder="Nama tampilan penulis"
+                        className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent text-sm"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Profil Penulis</label>
+                    <textarea
+                        name="author_profile"
+                        value={formData.author_profile}
+                        onChange={handleChange}
+                        placeholder="Deskripsi singkat penulis..."
+                        className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent text-sm"
+                        rows="3"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Kutipan / Quotes</label>
+                    <textarea
+                        name="author_quotes"
+                        value={formData.author_quotes}
+                        onChange={handleChange}
+                        placeholder="Kutipan motivasi dari penulis..."
+                        className="w-full p-2 rounded-lg border border-subtle focus:outline-none focus:border-accent text-sm"
+                        rows="2"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-txt-primary mb-1">Foto Penulis</label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAuthorImageChange}
+                        className="w-full border border-subtle rounded-lg p-2 text-sm bg-white focus:outline-none focus:border-accent"
+                    />
+                    {authorImagePreview && (
+                        <img
+                        src={authorImagePreview}
+                        alt="Preview Author"
+                        className="mt-3 w-16 h-16 object-cover rounded-full border-2 border-subtle shadow-sm"
+                        />
+                    )}
+                </div>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-subtle">
             <h3 className="font-semibold text-txt-primary mb-4 border-b border-subtle pb-2">Gambar Utama</h3>
-            
-            <div 
+            <div
                 onClick={handleImageAreaClick}
                 className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:bg-gray-50 transition-colors relative h-64 flex flex-col justify-center items-center group cursor-pointer overflow-hidden"
             >
-              <input 
-                type="file" 
+              <input
+                type="file"
                 accept="image/*"
                 ref={fileInputRef}
                 onChange={handleImageChange}
-                className="hidden" 
+                className="hidden"
               />
-              
-              {/* --- 3. PREVIEW GAMBAR --- */}
+
               {imagePreview ? (
                 <>
-                  <img 
-                    src={imagePreview} 
-                    alt="Preview" 
-                    className="absolute inset-0 w-full h-full object-cover rounded-md z-10" 
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="absolute inset-0 w-full h-full object-cover rounded-md z-10"
                   />
                   <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <div className="text-white flex flex-col items-center">
@@ -320,7 +428,7 @@ const ArtikelForm = () => {
               ) : (
                 <div className="py-8 z-10 text-gray-400 group-hover:text-accent transition-colors">
                   <div className="mx-auto w-12 h-12 mb-2">
-                    <UploadIcon />
+                        <UploadIcon />
                   </div>
                   <p className="text-sm font-medium">Klik untuk upload</p>
                   <p className="text-xs mt-1 text-gray-400">JPG, PNG, GIF, WEBP</p>

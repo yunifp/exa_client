@@ -1,14 +1,20 @@
 import React from "react";
+import { useLocation } from "react-router-dom";
 import Hero from "../components/common/Hero";
 import BlogMainSection from "../components/informasi/BlogMainSection";
 
 import heroBg from "../assets/hero-blog.webp";
+
 function BlogPage() {
+  const location = useLocation();
+  const authorName = location.state?.authorName;
+
   const heroProps = {
-    welcomeText: "Informasi",
-    title: "Blog Exaque",
-    subtitle:
-      "Temukan wawasan, tren industri, dan praktik terbaik seputar Customer Journey Management dan optimalisasi layanan dari para ahli kami.",
+    welcomeText: authorName ? "Penulis" : "Informasi",
+    title: authorName ? `Artikel oleh ${authorName}` : "Blog Exaque",
+    subtitle: authorName
+      ? `Kumpulan artikel, wawasan, dan praktik terbaik yang ditulis langsung oleh ${authorName}.`
+      : "Temukan wawasan, tren industri, dan praktik terbaik seputar Customer Journey Management dan optimalisasi layanan dari para ahli kami.",
     imageUrl: heroBg,
     textAlign: "text-center mx-auto",
     buttonJustify: "justify-center",

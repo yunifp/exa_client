@@ -12,6 +12,7 @@ export const AuthProvider = ({ children }) => {
     const checkUserLoggedIn = async () => {
       try {
         const response = await request("/auth/me");
+        console.log("Auth check response:", response.data);
         if (response && response.data && response.data.user) {
           setUser(response.data.user);
         } else {

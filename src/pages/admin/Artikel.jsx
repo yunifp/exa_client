@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect } from "react";
 import DataTable from "../../components/admin/DataTable";
 import { useNavigate } from "react-router-dom";
@@ -82,7 +83,7 @@ const Artikel = () => {
             {
                   header: "Penulis",
                   accessor: "author",
-                  render: (item) => item.author ? item.author.name : "Admin"
+                  render: (item) => item.author_name || (item.author ? item.author.name : "Admin")
             },
             {
                   header: "Tanggal",
@@ -94,7 +95,7 @@ const Artikel = () => {
                   accessor: "status",
                   render: (item) => (
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-          ${item.status === "published" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+             ${item.status === "published" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
                               {item.status}
                         </span>
                   ),

@@ -1,23 +1,28 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect } from "react";
-import { Link, useLocation} from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import Pagination from "../common/Pagination";
 import useApi from "../../hooks/UseApi";
 
 const BlogMainSection = () => {
   // State Data
-  const [posts, setPosts] = useState([]); // Semua artikel
+  const [posts, setPosts] = useState([]);
   const [recentPosts, setRecentPosts] = useState([]);
   const [categories, setCategories] = useState([]);
   const location = useLocation();
 
   // State Filter & Pagination
-  const [selectedCategory, setSelectedCategory] = useState(null); // Filter Kategori
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  
+  // --- TAMBAHAN STATE UNTUK PENULIS ---
+  const [selectedAuthorId, setSelectedAuthorId] = useState(null); 
+  const [selectedAuthorName, setSelectedAuthorName] = useState(null); 
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 3;
 
   const { request, loading, error } = useApi();
 
-  // --- 1. FETCH DATA ---
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -28,7 +33,6 @@ const BlogMainSection = () => {
 
         const articlesData = articlesRes.data?.data || [];
 
-        // Filter Published & Sort Date Descending
         const publishedPosts = articlesData
           .filter((p) => (p.status || "").toLowerCase() === "published")
           .sort(
@@ -38,10 +42,9 @@ const BlogMainSection = () => {
           );
 
         setPosts(publishedPosts);
-        setRecentPosts(publishedPosts.slice(0, 3)); // Ambil 3 untuk sidebar
+        setRecentPosts(publishedPosts.slice(0, 3));
 
-        const categoriesData =
-          categoriesRes.data?.data || categoriesRes.data || [];
+        const categoriesData = categoriesRes.data?.data || categoriesRes.data || [];
         setCategories(categoriesData);
       } catch (err) {
         console.error("Gagal memuat data blog:", err);
@@ -52,27 +55,46 @@ const BlogMainSection = () => {
   }, [request]);
 
   useEffect(() => {
-    // Jika ada state category dari halaman Detail, pasang ke filter
+    // Tangkap state kategori
     if (location.state?.category) {
       setSelectedCategory(location.state.category);
-      // Bersihkan state agar saat refresh tidak nyangkut (opsional)
+      setSelectedAuthorId(null); // Reset penulis jika pilih kategori
+      window.history.replaceState({}, document.title);
+    }
+    
+    // --- TAMBAHAN TANGKAP STATE PENULIS ---
+    if (location.state?.authorId) {
+      setSelectedAuthorId(location.state.authorId);
+      setSelectedAuthorName(location.state.authorName || "Penulis");
+      setSelectedCategory(null); // Reset kategori jika pilih penulis
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
-  // --- 2. LOGIC FILTER KATEGORI ---
-  const filteredPosts = selectedCategory
-    ? posts.filter((post) =>
-        post.categories?.some((cat) => cat.name === selectedCategory)
-      )
-    : posts;
 
-  // --- 3. LOGIC PAGINATION ---
+  // --- LOGIC FILTER (KATEGORI & PENULIS) ---
+  let filteredPosts = posts;
+
+  if (selectedCategory) {
+    filteredPosts = filteredPosts.filter((post) =>
+      post.categories?.some((cat) => cat.name === selectedCategory)
+    );
+  }
+
+  if (selectedAuthorName) {
+    filteredPosts = filteredPosts.filter((post) => {
+      // Pastikan urutan prioritas nama sama persis dengan yang ada di DetailBlog.jsx
+      const postAuthorName = post.author_override || post.author_name || post.author?.name || "Tim Exaque";
+      
+      return postAuthorName === selectedAuthorName;
+    });
+  }
+
+  // --- LOGIC PAGINATION ---
   const totalPages = Math.ceil(filteredPosts.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentPosts = filteredPosts.slice(indexOfFirstItem, indexOfLastItem);
 
-  // --- HELPERS ---
   const handlePageChange = (page) => {
     setCurrentPage(page);
     document.getElementById("blog-top")?.scrollIntoView({ behavior: "smooth" });
@@ -80,8 +102,17 @@ const BlogMainSection = () => {
 
   const handleCategoryClick = (categoryName) => {
     setSelectedCategory(categoryName);
-    setCurrentPage(1); // Reset ke halaman 1 saat filter berubah
+    setSelectedAuthorId(null); // Bersihkan filter penulis saat ganti kategori
+    setCurrentPage(1);
     document.getElementById("blog-top")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Fungsi untuk membersihkan semua filter
+  const handleClearFilters = () => {
+    setSelectedCategory(null);
+    setSelectedAuthorId(null);
+    setSelectedAuthorName(null);
+    setCurrentPage(1);
   };
 
   const formatDate = (dateString) => {
@@ -104,33 +135,19 @@ const BlogMainSection = () => {
     if (!html) return "";
     const doc = new DOMParser().parseFromString(html, "text/html");
     let text = doc.body.textContent || "";
-    
-    // TAMBAHAN: Hapus Non-Breaking Space (&nbsp;) yang bikin teks memanjang
-    // Ganti semua jenis spasi aneh menjadi spasi biasa
     text = text.replace(/\u00A0/g, " "); 
-    
-    return text;
-};
-
-  // --- PERBAIKAN UTAMA DI SINI ---
-  const getLimitedDescription = (item, limit = 10) => {
-    // 1. Ambil teks dari excerpt ATAU content
-    let text = item.excerpt || stripHtml(item.content);
-    
-    // 2. Jika kosong, return string kosong
-    if (!text) return "";
-
-    // 3. Potong jika terlalu panjang
-    if (text.length > limit) {
-      // PERBAIKAN: Gunakan 0, bukan 1. Agar huruf pertama tidak hilang.
-      return text.substring(0, limit) + "..."; 
-    }
-    
-    
     return text;
   };
 
-  // --- RENDER ---
+  const getLimitedDescription = (item, limit = 10) => {
+    let text = item.excerpt || stripHtml(item.content);
+    if (!text) return "";
+    if (text.length > limit) {
+      return text.substring(0, limit) + "..."; 
+    }
+    return text;
+  };
+
   if (loading)
     return <div className="py-32 text-center">Memuat konten blog...</div>;
   if (error)
@@ -140,15 +157,19 @@ const BlogMainSection = () => {
     <section id="blog-top" className="py-20 bg-white">
       <div className="container mx-auto px-6 max-w-7xl">
         
-        {/* Header Filter Info */}
-        {selectedCategory && (
-            <div className="mb-8 flex items-center gap-4">
-                <h2 className="text-xl font-bold text-gray-700">
-                    Kategori: <span className="text-accent">{selectedCategory}</span>
+        {/* Header Filter Info (Disesuaikan untuk menampilkan Info Penulis atau Kategori) */}
+        {(selectedCategory || selectedAuthorId) && (
+            <div className="mb-8 flex items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100 inline-flex">
+                <h2 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
+                    {selectedCategory ? (
+                        <>Kategori: <span className="text-accent">{selectedCategory}</span></>
+                    ) : (
+                        <>Artikel oleh: <span className="text-accent">{selectedAuthorName}</span></>
+                    )}
                 </h2>
                 <button 
-                    onClick={() => handleCategoryClick(null)}
-                    className="text-sm text-gray-500 underline hover:text-accent"
+                    onClick={handleClearFilters}
+                    className="text-sm bg-white border border-gray-200 text-gray-500 px-3 py-1 rounded-full hover:text-accent hover:border-accent transition-colors"
                 >
                     Tampilkan Semua
                 </button>
@@ -157,7 +178,6 @@ const BlogMainSection = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           
-          {/* KOLOM KIRI: Daftar Artikel */}
           <div className="lg:col-span-2">
             <div className="space-y-16">
               {currentPosts.length > 0 ? (
@@ -171,7 +191,6 @@ const BlogMainSection = () => {
                       />
                     </div>
                     <div>
-                      {/* Tanggal & Kategori */}
                       <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
                          <span>{formatDate(post.published_at || post.createdAt)}</span>
                          {post.categories?.[0] && (
@@ -186,7 +205,6 @@ const BlogMainSection = () => {
                         <Link to={`/blog/${post.slug}`}>{post.title}</Link>
                       </h2>
                       
-                      {/* Deskripsi Singkat */}
                       <p className="text-gray-600 text-md leading-relaxed mb-6">
                         {getLimitedDescription(post, 190)}
                       </p>
@@ -202,12 +220,11 @@ const BlogMainSection = () => {
                 ))
               ) : (
                 <div className="text-center py-10 text-gray-500 bg-gray-50 rounded-xl">
-                  Tidak ada artikel ditemukan untuk kategori ini.
+                  Tidak ada artikel ditemukan.
                 </div>
               )}
             </div>
 
-            {/* Pagination */}
             {filteredPosts.length > itemsPerPage && (
               <div className="mt-16">
                 <Pagination
@@ -219,11 +236,9 @@ const BlogMainSection = () => {
             )}
           </div>
 
-          {/* KOLOM KANAN: Sidebar */}
           <div className="lg:col-span-1 pl-0 lg:pl-8">
             <div className="sticky top-24 space-y-12">
               
-              {/* Widget Artikel Terbaru */}
               <div>
                 <h3 className="text-xl font-bold text-gray-900 mb-6 border-b border-gray-200 pb-2">
                   Artikel Terbaru
@@ -256,7 +271,6 @@ const BlogMainSection = () => {
                 </div>
               </div>
 
-              {/* Widget Kategori */}
               <div className="bg-white">
                 <h3 className="text-xl font-bold text-gray-900 mb-6 border-b border-gray-200 pb-2">
                   Kategori
@@ -264,13 +278,13 @@ const BlogMainSection = () => {
                 <ul className="space-y-3">
                   <li>
                     <button
-                        onClick={() => handleCategoryClick(null)}
+                        onClick={handleClearFilters}
                         className={`text-sm w-full text-left border-b border-gray-100 pb-2 transition-all capitalize
-                            ${selectedCategory === null 
+                            ${(selectedCategory === null && selectedAuthorId === null) 
                                 ? "text-accent font-bold pl-2 border-l-2 border-l-accent" 
                                 : "text-gray-600 hover:text-accent hover:pl-2"}`}
                     >
-                        Semua Kategori
+                        Semua Artikel
                     </button>
                   </li>
 
